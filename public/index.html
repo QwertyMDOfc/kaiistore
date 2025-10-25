@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Login - KAII STORE</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+    .animate-fade-in { animation: fadeIn 0.6s ease-out; }
+  </style>
+  <script>
+    tailwind.config = { theme: { extend: { colors: { primary: '#8A2BE2', secondary: '#6A5ACD' } } } }
+  </script>
+</head>
+<body class="bg-gradient-to-br from-indigo-900 via-purple-900 to-pink-800 min-h-screen flex items-center justify-center p-4">
+  <div class="w-full max-w-md bg-white/10 backdrop-blur-lg rounded-2xl shadow-2xl p-8 text-white animate-fade-in">
+    <h1 class="text-3xl font-bold text-center mb-2">KAII STORE</h1>
+    <p class="text-center mb-6 opacity-90">Login atau Daftar Akun</p>
+
+    <div id="auth-forms">
+      <form id="loginForm" class="space-y-4">
+        <input type="email" id="loginEmail" placeholder="Email" class="w-full p-3 rounded-lg bg-white/20 border border-white/30 focus:outline-none focus:ring-2 focus:ring-purple-400" required />
+        <input type="password" id="loginPassword" placeholder="Password" class="w-full p-3 rounded-lg bg-white/20 border border-white/30 focus:outline-none focus:ring-2 focus:ring-purple-400" required />
+        <button type="submit" class="w-full py-3 bg-gradient-to-r from-purple-600 to-pink-600 rounded-lg font-semibold hover:opacity-90 transition">Login</button>
+      </form>
+
+      <div class="text-center my-4 text-sm">Atau</div>
+
+      <form id="registerForm" class="space-y-4 hidden">
+        <input type="text" id="regName" placeholder="Nama Lengkap" class="w-full p-3 rounded-lg bg-white/20 border border-white/30 focus:outline-none focus:ring-2 focus:ring-purple-400" required />
+        <input type="email" id="regEmail" placeholder="Email" class="w-full p-3 rounded-lg bg-white/20 border border-white/30 focus:outline-none focus:ring-2 focus:ring-purple-400" required />
+        <input type="password" id="regPassword" placeholder="Password" class="w-full p-3 rounded-lg bg-white/20 border border-white/30 focus:outline-none focus:ring-2 focus:ring-purple-400" required />
+        <button type="submit" class="w-full py-3 bg-gradient-to-r from-blue-600 to-indigo-600 rounded-lg font-semibold hover:opacity-90 transition">Daftar</button>
+      </form>
+
+      <div class="text-center mt-4">
+        <button id="toggleAuth" class="text-sm underline">Belum punya akun? Daftar</button>
+      </div>
+    </div>
+
+    <div id="message" class="mt-4 text-center text-red-300 hidden"></div>
+  </div>
+
+  <script>
+    document.getElementById('toggleAuth').onclick = function() {
+      const login = document.getElementById('loginForm');
+      const register = document.getElementById('registerForm');
+      if (login.classList.contains('hidden')) {
+        login.classList.remove('hidden');
+        register.classList.add('hidden');
+        this.textContent = 'Belum punya akun? Daftar';
+      } else {
+        login.classList.add('hidden');
+        register.classList.remove('hidden');
+        this.textContent = 'Sudah punya akun? Login';
+      }
+    };
+
+    document.getElementById('loginForm').onsubmit = async (e) => {
+      e.preventDefault();
+      const email = document.getElementById('loginEmail').value;
+      const password = document.getElementById('loginPassword').value;
+      const res = await fetch('/api/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, password })
+      });
+      const data = await res.json();
+      if (res.ok) {
+        localStorage.setItem('token', data.token);
+        localStorage.setItem('user', JSON.stringify(data.user));
+        window.location.href = data.user.role === 'admin' ? 'admin.html' : 'dashboard.html';
+      } else {
+        document.getElementById('message').textContent = data.error || 'Login gagal';
+        document.getElementById('message').classList.remove('hidden');
+      }
+    };
+
+    document.getElementById('registerForm').onsubmit = async (e) => {
+      e.preventDefault();
+      const name = document.getElementById('regName').value;
+      const email = document.getElementById('regEmail').value;
+      const password = document.getElementById('regPassword').value;
+      const res = await fetch('/api/register', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name, email, password })
+      });
+      if (res.ok) {
+        alert('Pendaftaran berhasil! Silakan login.');
+        document.getElementById('toggleAuth').click();
+      } else {
+        const data = await res.json();
+        document.getElementById('message').textContent = data.error || 'Pendaftaran gagal';
+        document.getElementById('message').classList.remove('hidden');
+      }
+    };
+  </script>
+</body>
+  </html>
