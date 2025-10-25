@@ -1,0 +1,322 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Admin - KAII STORE</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+    .animate-fade-in { animation: fadeIn 0.6s ease-out; }
+    .nav-link { @apply py-2 px-4 rounded-lg transition cursor-pointer; }
+    .nav-link.active { @apply bg-purple-600 text-white; }
+    .nav-link:not(.active) { @apply text-gray-700 hover:bg-gray-200; }
+  </style>
+</head>
+<body class="bg-gray-50 min-h-screen flex">
+  <!-- Sidebar -->
+  <div class="w-64 bg-white shadow p-4">
+    <h1 class="text-2xl font-bold text-purple-800 mb-8">KAII STORE Admin</h1>
+    <nav id="adminNav" class="space-y-2">
+      <div class="nav-link active" data-page="dashboard">Dashboard</div>
+      <div class="nav-link" data-page="products">Produk</div>
+      <div class="nav-link" data-page="payments">Metode Pembayaran</div>
+      <div class="nav-link" data-page="orders">Pesanan</div>
+    </nav>
+    <button onclick="logout()" class="mt-8 w-full py-2 bg-red-500 text-white rounded-lg hover:bg-red-600">Logout</button>
+  </div>
+
+  <!-- Main Content -->
+  <div class="flex-1 p-6 overflow-auto">
+    <div id="pageContent" class="animate-fade-in"></div>
+  </div>
+
+  <script>
+    let currentPage = 'dashboard';
+
+    function logout() {
+      localStorage.removeItem('token');
+      localStorage.removeItem('user');
+      window.location.href = 'index.html';
+    }
+
+    async function api(url, options = {}) {
+      const token = localStorage.getItem('token');
+      const res = await fetch(url, {
+        ...options,
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          ...options.headers
+        }
+      });
+      if (!res.ok) {
+        if (res.status === 401) logout();
+        throw new Error(await res.text());
+      }
+      return res.json();
+    }
+
+    function formatRupiah(angka) {
+      return new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 }).format(angka);
+    }
+
+    function formatDate(dateStr) {
+      return new Date(dateStr).toLocaleString('id-ID');
+    }
+
+    // Navigation
+    document.querySelectorAll('.nav-link').forEach(link => {
+      link.onclick = () => {
+        document.querySelectorAll('.nav-link').forEach(l => l.classList.remove('active'));
+        link.classList.add('active');
+        currentPage = link.dataset.page;
+        loadPage();
+      };
+    });
+
+    // Pages
+    async function loadPage() {
+      let html = '';
+      try {
+        if (currentPage === 'dashboard') {
+          const data = await api('/api/admin/dashboard');
+          html = `
+            <h2 class="text-2xl font-bold mb-6">Dashboard</h2>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div class="bg-white p-6 rounded-xl shadow">
+                <h3 class="text-lg font-semibold text-gray-700">Total Pesanan</h3>
+                <p class="text-3xl font-bold text-purple-700">${data.total_orders}</p>
+              </div>
+              <div class="bg-white p-6 rounded-xl shadow">
+                <h3 class="text-lg font-semibold text-gray-700">Menunggu Konfirmasi</h3>
+                <p class="text-3xl font-bold text-orange-600">${data.pending_confirmation}</p>
+              </div>
+            </div>
+          `;
+        } 
+        else if (currentPage === 'products') {
+          const products = await api('/api/admin/products');
+          html = `
+            <h2 class="text-2xl font-bold mb-4">Kelola Produk</h2>
+            <button onclick="showProductModal()" class="mb-4 px-4 py-2 bg-purple-600 text-white rounded-lg">+ Tambah Produk</button>
+            <div class="grid grid-cols-1 gap-4">
+              ${products.map(p => `
+                <div class="bg-white p-4 rounded-xl shadow">
+                  <h3 class="font-bold">${p.name}</h3>
+                  <p class="text-gray-600 text-sm">${p.description || ''}</p>
+                  <p class="text-purple-700 font-semibold mt-1">${formatRupiah(p.price)}</p>
+                  <p class="text-gray-500">Stok: ${p.stock}</p>
+                  <button onclick="editProduct(${p.id}, '${p.name}', ${p.price}, ${p.stock}, \`${p.description || ''}\`)" 
+                    class="mt-2 mr-2 px-3 py-1 bg-blue-500 text-white rounded text-sm">Edit</button>
+                </div>
+              `).join('')}
+            </div>
+          `;
+        }
+        else if (currentPage === 'payments') {
+          const methods = await api('/api/admin/payment-methods');
+          html = `
+            <h2 class="text-2xl font-bold mb-4">Metode Pembayaran</h2>
+            <button onclick="showPaymentModal()" class="mb-4 px-4 py-2 bg-purple-600 text-white rounded-lg">+ Tambah Metode</button>
+            <div class="space-y-4">
+              ${methods.map(m => `
+                <div class="bg-white p-4 rounded-xl shadow">
+                  <div class="flex justify-between">
+                    <div>
+                      <h3 class="font-bold">${m.name} (${m.type})</h3>
+                      <pre class="whitespace-pre-wrap text-sm text-gray-700 mt-1">${m.details}</pre>
+                    </div>
+                    <div>
+                      <span class="px-2 py-1 rounded text-xs ${
+                        m.is_active ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
+                      }">${m.is_active ? 'Aktif' : 'Nonaktif'}</span>
+                      <button onclick="editPayment(${m.id}, '${m.name}', '${m.type}', \`${m.details}\`, ${m.is_active})" 
+                        class="ml-2 px-3 py-1 bg-blue-500 text-white rounded text-sm">Edit</button>
+                    </div>
+                  </div>
+                </div>
+              `).join('')}
+            </div>
+          `;
+        }
+        else if (currentPage === 'orders') {
+          const orders = await api('/api/admin/orders');
+          html = `
+            <h2 class="text-2xl font-bold mb-4">Kelola Pesanan</h2>
+            <div class="space-y-4">
+              ${orders.map(o => `
+                <div class="bg-white p-4 rounded-xl shadow">
+                  <div class="flex justify-between">
+                    <div>
+                      <h3 class="font-bold">${o.product_name}</h3>
+                      <p class="text-gray-600">User: ${o.user_name}</p>
+                      <p>Jumlah: ${o.quantity} × ${formatRupiah(o.total / o.quantity)} = ${formatRupiah(o.total)}</p>
+                      <p class="text-sm">Metode: ${o.payment_name}</p>
+                      <p class="text-xs text-gray-500">${formatDate(o.created_at)}</p>
+                    </div>
+                    <span class="px-3 py-1 rounded-full text-xs ${
+                      o.status === 'pending_confirmation' ? 'bg-yellow-100 text-yellow-800' :
+                      o.status === 'completed' ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'
+                    }">
+                      ${{
+                        'pending_payment': 'Menunggu Upload',
+                        'pending_confirmation': 'Menunggu ACC',
+                        'processing': 'Diproses',
+                        'completed': 'Selesai'
+                      }[o.status] || o.status}
+                    </span>
+                  </div>
+                  ${o.proof_image_url ? `<img src="${o.proof_image_url}" class="mt-2 w-32 h-32 object-cover rounded" />` : '<p class="mt-2 text-red-500">Belum upload bukti</p>'}
+                  ${o.status === 'pending_confirmation' ? `
+                    <div class="mt-3">
+                      <textarea id="content_${o.id}" placeholder="Isi pesanan untuk user..." class="w-full p-2 border rounded mb-2"></textarea>
+                      <button onclick="deliverOrder(${o.id})" class="px-4 py-2 bg-green-600 text-white rounded">Kirim Pesanan</button>
+                    </div>
+                  ` : o.order_content ? `<div class="mt-2 p-2 bg-green-50 rounded"><strong>Isi:</strong> ${o.order_content}</div>` : ''}
+                </div>
+              `).join('')}
+            </div>
+          `;
+        }
+      } catch (e) {
+        html = `<p class="text-red-500">Error: ${e.message}</p>`;
+      }
+      document.getElementById('pageContent').innerHTML = html;
+    }
+
+    // Modals
+    function showProductModal(id = null, name = '', price = 0, stock = 0, desc = '') {
+      const modal = document.createElement('div');
+      modal.innerHTML = `
+        <div class="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+          <div class="bg-white rounded-2xl w-full max-w-md p-6">
+            <h3 class="text-xl font-bold mb-4">${id ? 'Edit Produk' : 'Tambah Produk'}</h3>
+            <form id="productForm" class="space-y-4">
+              <input type="hidden" id="productId" value="${id || ''}">
+              <input type="text" id="productName" placeholder="Nama Produk" value="${name}" class="w-full p-2 border rounded" required>
+              <input type="number" id="productPrice" placeholder="Harga" value="${price}" class="w-full p-2 border rounded" required>
+              <input type="number" id="productStock" placeholder="Stok" value="${stock}" class="w-full p-2 border rounded" required>
+              <textarea id="productDesc" placeholder="Deskripsi" class="w-full p-2 border rounded">${desc}</textarea>
+              <div class="flex justify-end space-x-2">
+                <button type="button" onclick="closeModal()" class="px-4 py-2 bg-gray-300 rounded">Batal</button>
+                <button type="submit" class="px-4 py-2 bg-purple-600 text-white rounded">${id ? 'Simpan' : 'Tambah'}</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      `;
+      document.body.appendChild(modal);
+
+      document.getElementById('productForm').onsubmit = async (e) => {
+        e.preventDefault();
+        const pid = document.getElementById('productId').value;
+        const data = {
+          name: document.getElementById('productName').value,
+          price: parseInt(document.getElementById('productPrice').value),
+          stock: parseInt(document.getElementById('productStock').value),
+          description: document.getElementById('productDesc').value
+        };
+        try {
+          if (pid) {
+            await api(`/api/admin/products/${pid}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data) });
+          } else {
+            await api('/api/admin/products', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data) });
+          }
+          closeModal();
+          loadPage();
+        } catch (e) {
+          alert('Error: ' + e.message);
+        }
+      };
+    }
+
+    function showPaymentModal(id = null, name = '', type = 'e-wallet', details = '', active = true) {
+      const modal = document.createElement('div');
+      modal.innerHTML = `
+        <div class="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+          <div class="bg-white rounded-2xl w-full max-w-md p-6">
+            <h3 class="text-xl font-bold mb-4">${id ? 'Edit Metode' : 'Tambah Metode'}</h3>
+            <form id="paymentForm" class="space-y-4">
+              <input type="hidden" id="paymentId" value="${id || ''}">
+              <input type="text" id="paymentName" placeholder="Nama (contoh: Keris)" value="${name}" class="w-full p-2 border rounded" required>
+              <select id="paymentType" class="w-full p-2 border rounded">
+                <option value="e-wallet" ${type === 'e-wallet' ? 'selected' : ''}>E-Wallet</option>
+                <option value="bank" ${type === 'bank' ? 'selected' : ''}>Bank Transfer</option>
+                <option value="lainnya" ${type === 'lainnya' ? 'selected' : ''}>Lainnya</option>
+              </select>
+              <textarea id="paymentDetails" placeholder="Detail (nomor, nama, dll)" class="w-full p-2 border rounded" required>${details}</textarea>
+              <label class="flex items-center">
+                <input type="checkbox" id="paymentActive" ${active ? 'checked' : ''} class="mr-2">
+                Aktif
+              </label>
+              <div class="flex justify-end space-x-2">
+                <button type="button" onclick="closeModal()" class="px-4 py-2 bg-gray-300 rounded">Batal</button>
+                <button type="submit" class="px-4 py-2 bg-purple-600 text-white rounded">${id ? 'Simpan' : 'Tambah'}</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      `;
+      document.body.appendChild(modal);
+
+      document.getElementById('paymentForm').onsubmit = async (e) => {
+        e.preventDefault();
+        const pid = document.getElementById('paymentId').value;
+        const data = {
+          name: document.getElementById('paymentName').value,
+          type: document.getElementById('paymentType').value,
+          details: document.getElementById('paymentDetails').value,
+          is_active: document.getElementById('paymentActive').checked
+        };
+        try {
+          if (pid) {
+            await api(`/api/admin/payment-methods/${pid}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data) });
+          } else {
+            await api('/api/admin/payment-methods', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data) });
+          }
+          closeModal();
+          loadPage();
+        } catch (e) {
+          alert('Error: ' + e.message);
+        }
+      };
+    }
+
+    function closeModal() {
+      const modal = document.querySelector('.fixed.inset-0');
+      if (modal) modal.remove();
+    }
+
+    // Actions
+    function editProduct(id, name, price, stock, desc) {
+      showProductModal(id, name, price, stock, desc);
+    }
+
+    function editPayment(id, name, type, details, active) {
+      showPaymentModal(id, name, type, details, active);
+    }
+
+    async function deliverOrder(orderId) {
+      const content = document.getElementById(`content_${orderId}`).value;
+      if (!content.trim()) return alert('Isi pesanan tidak boleh kosong!');
+      try {
+        await api(`/api/admin/orders/${orderId}/deliver`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ order_content: content })
+        });
+        loadPage();
+      } catch (e) {
+        alert('Error: ' + e.message);
+      }
+    }
+
+    // Init
+    window.onload = () => {
+      const user = JSON.parse(localStorage.getItem('user'));
+      if (!user || user.role !== 'admin') return window.location.href = 'index.html';
+      loadPage();
+    };
+  </script>
+</body>
+  </html>
